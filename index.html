@@ -185,6 +185,13 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   background: var(--vurgu-acik); border-radius: var(--r); padding: 10px 14px; font-size: 14px;
 }
 .uyari span { flex: 1 1 200px; }
+
+/* Harcama özeti kutucukları */
+.ozet-izgara { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ozet-kutu { background: var(--yuzey); border: 1px solid var(--cizgi); border-radius: var(--r); padding: 11px 13px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ozet-kutu .etiket { font-size: 11px; }
+.ozet-kutu .deger { font-family: var(--font-baslik); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+.ozet-kutu .ek { font-size: 13px; color: var(--soluk); overflow-wrap: anywhere; }
 </style>
 </head>
 <body>
@@ -224,6 +231,11 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   <section class="bolum" id="dagilimBolum" hidden>
     <div class="bolum-bas"><h2>Kategoriye göre</h2></div>
     <ul class="dagilim" id="dagilim"></ul>
+  </section>
+
+  <section class="bolum" id="istatistikBolum" hidden>
+    <div class="bolum-bas"><h2>Harcama özeti</h2></div>
+    <div class="ozet-izgara" id="istatistik"></div>
   </section>
 
   <section class="bolum">
@@ -449,6 +461,8 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
     }
     $("dagilimBolum").hidden = sirali.length === 0;
 
+    istatistikCiz(giderler, gider);
+
     // Kayıt listesi
     const goster = durum.filtre === null ? durum.kayitlar
       : durum.kayitlar.filter((k) => k.tur === "gider" &&
@@ -493,6 +507,48 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
       gun.append(kart);
       liste.append(gun);
     }
+  }
+
+  // En çok / en az harcanan gün, günlük ortalama gibi ay özetleri
+  function istatistikCiz(giderler, gider) {
+    const kutu = $("istatistik");
+    kutu.replaceChildren();
+    $("istatistikBolum").hidden = giderler.length === 0;
+    if (!giderler.length) return;
+
+    const gunAdi = (tarih) => {
+      const [gy, gm, gg] = tarih.split("-").map(Number);
+      return `${gg} ${AYLAR[gm - 1]}, ${GUNLER[new Date(gy, gm - 1, gg).getDay()]}`;
+    };
+    const gunToplam = new Map();
+    for (const k of giderler) gunToplam.set(k.tarih, (gunToplam.get(k.tarih) || 0) + k.tutar);
+    const gunler = [...gunToplam].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    const enCok = gunler[0];
+    const enAz = gunler[gunler.length - 1];
+
+    // Bu ay ise bugüne kadar geçen gün, geçmiş ay ise ayın tamamı
+    const [y, m] = durum.ay.split("-").map(Number);
+    const aydakiGun = new Date(y, m, 0).getDate();
+    const gecenGun = durum.ay === bugun().slice(0, 7) ? Number(bugun().slice(8)) : aydakiGun;
+    const harcamasiz = Math.max(0, gecenGun - gunToplam.size);
+
+    const enBuyukKayit = giderler.reduce((a, b) => (b.tutar > a.tutar ? b : a));
+
+    const ekle = (etiket, deger, ek) => {
+      const d = el("div", "ozet-kutu");
+      d.append(el("span", "etiket", etiket), el("span", "deger num", deger));
+      if (ek) d.append(el("span", "ek", ek));
+      kutu.append(d);
+    };
+    ekle("En çok harcanan gün", para.format(enCok[1]), gunAdi(enCok[0]));
+    if (gunler.length > 1) ekle("En az harcanan gün", para.format(enAz[1]), gunAdi(enAz[0]));
+    else ekle("En az harcanan gün", "—", "Tek günde harcama var");
+    ekle("Günlük ortalama", para.format(gider / gecenGun), `${gecenGun} güne göre`);
+    ekle("Harcama yapılan gün", `${gunToplam.size} gün`,
+      harcamasiz ? `${harcamasiz} gün harcamasız` : "Her gün harcama var");
+    ekle("En büyük harcama", para.format(enBuyukKayit.tutar),
+      `${enBuyukKayit.aciklama || katAd(enBuyukKayit.kategori)} · ${gunAdi(enBuyukKayit.tarih).split(",")[0]}`);
+    ekle("Kayıt başına ortalama", para.format(gider / giderler.length), `${giderler.length} harcama`);
   }
 
   function durumYaz(metin, hata) {
