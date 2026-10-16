@@ -247,7 +247,7 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   </section>
 </div>
 
-<button type="button" class="fab" id="ekleBtn" disabled>+ Harcama ekle</button>
+<button type="button" class="fab" id="ekleBtn" disabled>+ İşlem ekle</button>
 
 <div class="perde" id="perde" hidden></div>
 
@@ -291,10 +291,14 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
     <h2>Kategoriler</h2>
     <button type="button" class="hafif-btn" data-kapat>Kapat</button>
   </div>
-  <p class="not">Adı değiştirmek için üzerine yaz. Silinen kategorideki kayıtlar silinmez, "Kategorisiz" olarak görünür.</p>
+  <div class="tur-sec" role="radiogroup" aria-label="Kategori türü">
+    <button type="button" role="radio" data-kat-tur="gider" aria-checked="true">Gider</button>
+    <button type="button" role="radio" data-kat-tur="gelir" aria-checked="false">Gelir</button>
+  </div>
+  <p class="not">Gider ve gelir kategorileri ayrıdır. Adı değiştirmek için üzerine yaz. Silinen kategorideki kayıtlar silinmez, "Kategorisiz" (gelirde "Gelir") olarak görünür.</p>
   <ul class="kat-liste" id="katListe"></ul>
   <form class="kat-ekle" id="katEkle" novalidate>
-    <input class="satir-input" id="yeniKat" maxlength="30" placeholder="Yeni kategori adı" aria-label="Yeni kategori adı" autocomplete="off">
+    <input class="satir-input" id="yeniKat" maxlength="30" placeholder="Yeni gider kategorisi" aria-label="Yeni kategori adı" autocomplete="off">
     <button type="submit" class="ana-btn">Ekle</button>
   </form>
   <p class="hata" id="katHata" hidden></p>
@@ -325,6 +329,8 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   const GUNLER = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
   const VARSAYILAN = ["Market", "Yeme-İçme", "Ulaşım", "Faturalar", "Kira", "Giyim", "Sağlık",
     "Eğlence", "Eğitim", "Abonelikler", "Diğer"].map((ad, i) => ({ id: "k" + (i + 1), ad }));
+  const VARSAYILAN_GELIR = ["Maaş", "Ek iş", "Burs", "Harçlık", "Kira geliri", "Satış", "İade", "Diğer"]
+    .map((ad, i) => ({ id: "g" + (i + 1), ad }));
   const para = new Intl.NumberFormat("tr-TR", { style: "currency", currency: "TRY" });
   const sade = new Intl.NumberFormat("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -357,7 +363,7 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   }
 
   const durum = {
-    kategoriler: VARSAYILAN, tum: [], kayitlar: [], yuklendi: false, sonYedek: 0,
+    kategoriler: VARSAYILAN, gelirKategoriler: VARSAYILAN_GELIR, katTur: "gider", tum: [], kayitlar: [], yuklendi: false, sonYedek: 0,
     ay: bugun().slice(0, 7), filtre: null,
     duzenlenen: null, tur: "gider", secKategori: null, kaydediliyor: false,
   };
@@ -373,6 +379,7 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
       if (!ham) return;
       const v = JSON.parse(ham);
       if (Array.isArray(v.kategoriler)) durum.kategoriler = v.kategoriler.filter((k) => k && k.id && k.ad);
+      if (Array.isArray(v.gelirKategoriler)) durum.gelirKategoriler = v.gelirKategoriler.filter((k) => k && k.id && k.ad);
       if (Array.isArray(v.kayitlar)) durum.tum = v.kayitlar.filter(gecerliKayit);
       durum.sonYedek = Number(v.sonYedek) || 0;
     } catch (e) {
@@ -383,7 +390,7 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   function depoYaz() {
     try {
       localStorage.setItem(ANAHTAR, JSON.stringify({
-        surum: 1, kategoriler: durum.kategoriler, kayitlar: durum.tum, sonYedek: durum.sonYedek,
+        surum: 1, kategoriler: durum.kategoriler, gelirKategoriler: durum.gelirKategoriler, kayitlar: durum.tum, sonYedek: durum.sonYedek,
       }));
       return true;
     } catch (e) {
@@ -415,6 +422,9 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   }
 
   const katAd = (id) => (durum.kategoriler.find((k) => k.id === id) || {}).ad || "Kategorisiz";
+  const gelirKatAd = (id) => (durum.gelirKategoriler.find((k) => k.id === id) || {}).ad || "Gelir";
+  // Gider ve gelirin kategori listeleri ayrı tutulur
+  const katListesi = (tur) => (tur === "gelir" ? durum.gelirKategoriler : durum.kategoriler);
 
   // --- Görünüm ---------------------------------------------------------------
 
@@ -476,7 +486,7 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
     if (durum.yuklendi && goster.length === 0) {
       const bos = el("div", "bos");
       bos.append(el("strong", null, "Bu ay henüz kayıt yok"));
-      bos.append(document.createTextNode("Alttaki “Harcama ekle” düğmesiyle ilk harcamanı gir. Tutar, kategori ve açıklama yeterli."));
+      bos.append(document.createTextNode("Alttaki “İşlem ekle” düğmesiyle ilk harcamanı ya da gelirini gir. Tutar, kategori ve açıklama yeterli."));
       liste.append(bos);
     }
     const gunler = new Map();
@@ -496,7 +506,7 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
       for (const k of kayitlar) {
         const b = el("button", "kayit");
         b.type = "button";
-        const kategori = k.tur === "gelir" ? (k.kategori ? katAd(k.kategori) : "Gelir") : katAd(k.kategori);
+        const kategori = k.tur === "gelir" ? gelirKatAd(k.kategori) : katAd(k.kategori);
         b.append(el("span", "baslik", k.aciklama || kategori));
         b.append(el("span", `miktar num${k.tur === "gelir" ? " gelir" : ""}`,
           (k.tur === "gelir" ? "+" : "−") + para.format(k.tutar)));
@@ -580,13 +590,17 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
     durum.tur = tur;
     document.querySelectorAll("[data-tur]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.tur === tur)));
     $("formBaslik").textContent = (durum.duzenlenen ? "Düzenle: " : "") + (tur === "gider" ? "Harcama" : "Gelir") + (durum.duzenlenen ? "" : " ekle");
+    $("aciklama").placeholder = tur === "gider" ? "ör. Pazar alışverişi" : "ör. Ekim maaşı";
+    // Seçili kategori diğer türe aitse bırak
+    if (!katListesi(tur).some((k) => k.id === durum.secKategori)) durum.secKategori = null;
+    cipleriCiz();
   }
   document.querySelectorAll("[data-tur]").forEach((b) => b.addEventListener("click", () => turSec(b.dataset.tur)));
 
   function cipleriCiz() {
     const kap = $("kategoriSec");
     kap.replaceChildren();
-    for (const k of durum.kategoriler) {
+    for (const k of katListesi(durum.tur)) {
       const b = el("button", "cip", k.ad);
       b.type = "button";
       b.setAttribute("role", "radio");
@@ -615,7 +629,6 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
     $("silBtn").hidden = !kayit;
     $("silOnay").hidden = true;
     formHata("");
-    cipleriCiz();
     panelAc($("kayitPanel"));
     if (!kayit) setTimeout(() => $("tutar").focus(), 50);
   }
@@ -668,13 +681,14 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   // --- Kategoriler -----------------------------------------------------------
 
   function kategorileriKaydet(yeni) {
-    const onceki = durum.kategoriler;
-    durum.kategoriler = yeni;
+    const alan = durum.katTur === "gelir" ? "gelirKategoriler" : "kategoriler";
+    const onceki = durum[alan];
+    durum[alan] = yeni;
     if (depoYaz()) {
       $("katHata").hidden = true;
       kaliciDepoIste();
     } else {
-      durum.kategoriler = onceki;
+      durum[alan] = onceki;
       $("katHata").hidden = false;
       $("katHata").textContent = hataMetni();
     }
@@ -684,7 +698,8 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   function katListesiCiz() {
     const ul = $("katListe");
     ul.replaceChildren();
-    for (const k of durum.kategoriler) {
+    const liste = katListesi(durum.katTur);
+    for (const k of liste) {
       const li = el("li", "kat-satir");
       const inp = el("input", "satir-input");
       inp.id = "kat_" + k.id;
@@ -693,11 +708,11 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
       inp.setAttribute("aria-label", "Kategori adı");
       inp.addEventListener("change", () => {
         const ad = inp.value.trim();
-        if (!ad || durum.kategoriler.some((c) => c.id !== k.id && c.ad.toLocaleLowerCase("tr") === ad.toLocaleLowerCase("tr"))) {
+        if (!ad || liste.some((c) => c.id !== k.id && c.ad.toLocaleLowerCase("tr") === ad.toLocaleLowerCase("tr"))) {
           inp.value = k.ad;
           return;
         }
-        kategorileriKaydet(durum.kategoriler.map((c) => (c.id === k.id ? { ...c, ad } : c)));
+        kategorileriKaydet(liste.map((c) => (c.id === k.id ? { ...c, ad } : c)));
       });
       const sil = el("button", "kucuk-sil", "Sil");
       sil.type = "button";
@@ -711,7 +726,7 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
       sil.addEventListener("click", () => { onay.hidden = false; });
       hayir.addEventListener("click", () => { onay.hidden = true; });
       evet.addEventListener("click", () => {
-        kategorileriKaydet(durum.kategoriler.filter((c) => c.id !== k.id));
+        kategorileriKaydet(liste.filter((c) => c.id !== k.id));
         katListesiCiz();
       });
       li.append(inp, sil, onay);
@@ -719,21 +734,30 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
     }
   }
 
-  $("katAc").addEventListener("click", () => {
+  function katTurSec(tur) {
+    durum.katTur = tur;
+    document.querySelectorAll("[data-kat-tur]").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.katTur === tur)));
+    $("yeniKat").placeholder = tur === "gelir" ? "Yeni gelir kategorisi" : "Yeni gider kategorisi";
     $("katHata").hidden = true;
     katListesiCiz();
+  }
+  document.querySelectorAll("[data-kat-tur]").forEach((b) => b.addEventListener("click", () => katTurSec(b.dataset.katTur)));
+
+  $("katAc").addEventListener("click", () => {
+    katTurSec("gider");
     panelAc($("katPanel"));
   });
   $("katEkle").addEventListener("submit", (e) => {
     e.preventDefault();
     const ad = $("yeniKat").value.trim();
     if (!ad) return;
-    if (durum.kategoriler.some((c) => c.ad.toLocaleLowerCase("tr") === ad.toLocaleLowerCase("tr"))) {
+    if (katListesi(durum.katTur).some((c) => c.ad.toLocaleLowerCase("tr") === ad.toLocaleLowerCase("tr"))) {
       $("katHata").hidden = false;
       $("katHata").textContent = "Bu adda bir kategori zaten var.";
       return;
     }
-    kategorileriKaydet([...durum.kategoriler, { id: "k" + Date.now().toString(36), ad }]);
+    const onEk = durum.katTur === "gelir" ? "g" : "k";
+    kategorileriKaydet([...katListesi(durum.katTur), { id: onEk + Date.now().toString(36), ad }]);
     $("yeniKat").value = "";
     katListesiCiz();
   });
@@ -788,7 +812,7 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   }
 
   function yedekPaneliAc() {
-    $("yedekBilgi").textContent = `${durum.tum.length} kayıt, ${durum.kategoriler.length} kategori. ` +
+    $("yedekBilgi").textContent = `${durum.tum.length} kayıt, ${durum.kategoriler.length + durum.gelirKategoriler.length} kategori. ` +
       (durum.sonYedek ? `Son yedek: ${tarihYaz(durum.sonYedek)}.` : "Henüz yedek alınmadı.");
     $("yukleOnay").hidden = true;
     $("yedekSonuc").hidden = true;
@@ -807,7 +831,7 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   $("yedekIndir").addEventListener("click", () => {
     const veri = JSON.stringify({
       uygulama: "cep-harcama", surum: 1, tarih: new Date().toISOString(),
-      kategoriler: durum.kategoriler, kayitlar: durum.tum,
+      kategoriler: durum.kategoriler, gelirKategoriler: durum.gelirKategoriler, kayitlar: durum.tum,
     }, null, 1);
     const url = URL.createObjectURL(new Blob([veri], { type: "application/json" }));
     const a = document.createElement("a");
@@ -833,6 +857,8 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
       if (v.uygulama !== "cep-harcama" || !Array.isArray(v.kayitlar) || !Array.isArray(v.kategoriler)) throw 0;
       bekleyenYedek = {
         kategoriler: v.kategoriler.filter((k) => k && typeof k.id === "string" && typeof k.ad === "string"),
+        gelirKategoriler: (Array.isArray(v.gelirKategoriler) ? v.gelirKategoriler : [])
+          .filter((k) => k && typeof k.id === "string" && typeof k.ad === "string"),
         kayitlar: v.kayitlar.filter(gecerliKayit),
       };
       $("yukleOnayMetin").textContent = `Yedekte ${bekleyenYedek.kayitlar.length} kayıt var. Yüklersen bu cihazdaki ` +
@@ -847,11 +873,13 @@ h2 { margin: 0; font-family: var(--font-baslik); font-size: 16px; font-weight: 7
   $("yukleVazgec").addEventListener("click", () => { $("yukleOnay").hidden = true; $("yedekDosya").value = ""; });
   $("yukleEvet").addEventListener("click", () => {
     if (!bekleyenYedek) return;
-    const onceki = { k: durum.kategoriler, t: durum.tum };
+    const onceki = { k: durum.kategoriler, g: durum.gelirKategoriler, t: durum.tum };
     durum.kategoriler = bekleyenYedek.kategoriler.length ? bekleyenYedek.kategoriler : VARSAYILAN;
+    durum.gelirKategoriler = bekleyenYedek.gelirKategoriler.length ? bekleyenYedek.gelirKategoriler : VARSAYILAN_GELIR;
     durum.tum = bekleyenYedek.kayitlar;
     if (!depoYaz()) {
       durum.kategoriler = onceki.k;
+      durum.gelirKategoriler = onceki.g;
       durum.tum = onceki.t;
       sonucYaz(hataMetni(), true);
       return;
